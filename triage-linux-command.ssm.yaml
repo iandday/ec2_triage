@@ -1,0 +1,47 @@
+---
+schemaVersion: "2.2"
+description: "Linux triage command document, inspired from https://www.brimorlabsblog.com/2019/04/live-response-collection-cedarpelta.html"
+parameters:
+  bucket:
+    type: String
+    description: output bucket
+  caseNum:
+    type: String
+    description: case tracking number
+  instanceID:
+    type: String
+    description: EC2 instance ID to collect triage data from
+mainSteps:
+- action: "aws:runShellScript"
+  name: runCollectionScript
+  inputs:
+    runCommand:
+      - OUTPUT=s3://{{ bucket }}/{{ caseNum }}/{{ instanceID }}
+      - TS=$(date +%Y%m%dT%T_%z)
+      - echo 'Starting triage collection'
+      - echo 'System time $(TS)'
+      - hostname | aws s3 cp - $OUTPUT/hostname.txt 
+      - who | aws s3 cp - $OUTPUT/Logged_In_Users.txt
+      - find / -name ".*" -ls | aws s3 cp - $OUTPUT/HiddenFiles.txt
+      - ps aux --forest | aws s3 cp - $OUTPUT/List_of_Running_Processes.txt
+      - pstree -ah | aws s3 cp - $OUTPUT/Process_tree_and_arguments.txt
+      - mount | aws s3 cp - $OUTPUT/Mounted_items.txt
+      - lsblk -o NAME,FSTYPE,SIZE,MOUNTPOINT,LABEL | aws s3 cp - $OUTPUT/lsblk.txt
+      - lsmod | aws s3 cp - $OUTPUT/Disk_utility.txt/Loaded_Kernel_Extensions.txt
+      - uptime | aws s3 cp - $OUTPUT/System_uptime.txt
+      - uname -a | aws s3 cp - $OUTPUT/System_environment.txt
+      - printenv | aws s3 cp - $OUTPUT/System_environment_detailed.txt
+      - cat /proc/version | aws s3 cp - $OUTPUT/OS_kernel_version.txt
+      - top -n 1 -b | aws s3 cp - $OUTPUT/Process_memory_usage.txt
+      - service --status-all | grep + | aws s3 cp - $OUTPUT/Running_services.txt
+      - lsmod | aws s3 cp - $OUTPUT/Loaded_modules.txt
+      - last | aws s3 cp - $OUTPUT/Last_logins.txt
+      - cat /etc/passwd | aws s3 cp - $OUTPUT/passwd.txt
+      - cat /etc/group | aws s3 cp - $OUTPUT/group.txt
+      - lastlog | aws s3 cp - $OUTPUT/Last_login_per_user.txt
+      - whoami | aws s3 cp - $OUTPUT/whoami.txt
+      - id | aws s3 cp - $OUTPUT/id.txt
+      - for i in `ls /home/`; do cat /home/$i/.bash_history | aws s3 cp - $OUTPUT/home-$i-bash_History.txt; done
+      - aws s3 cp --recursive /var/log/ $OUTPUT/Logs/var
+      - aws s3 cp --recursive --include "cron*" /etc/ $OUTPUT/Logs/cron
+      - exit 0

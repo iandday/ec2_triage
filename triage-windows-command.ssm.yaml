@@ -1,0 +1,14 @@
+---
+schemaVersion: "2.2"
+description: "Windows triage command document"
+parameters:
+  bucket:
+    type: String
+    description: output bucket
+  caseNum:
+    type: String
+    description: case tracking number
+  instanceID:
+    type: String
+    description: EC2 instance ID to collect triage data from
+#mainSteps:

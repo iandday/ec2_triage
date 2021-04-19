@@ -1,0 +1,56 @@
+schemaVersion: '0.3'
+description: |-
+    **Security incident response automation document for Linux instances**
+parameters:
+    instanceID:
+        type: String
+        description: EC2 instance ID to collect triage data from
+    caseNum:
+        type: String
+        description: Case number
+    bucket:
+        type: String
+        description: Output bucket for triage results
+mainSteps:
+    - name: runCommandDocument
+      action: aws:runCommand
+      inputs:
+        DocumentName: triage-linux-command
+        InstanceIds:
+          - '{{ instanceID }}'
+        Parameters: 
+          caseNum: '{{ caseNum }}'
+          bucket: '{{ bucket }}'
+          instanceID: '{{ instanceID }}'
+    - name: update_triage_tag 
+      action: aws:branch
+      inputs:
+        Choices:
+          - Variable: '{{ runCommandDocument.Status }}'
+            StringEquals: Success
+            NextStep: createSuccessTag
+          - Variable: '{{ runCommandDocument.Status }}'
+            StringEquals: Failed
+            NextStep: createFailTag
+    - name: createSuccessTag
+      action: aws:createTags
+      description: update triage status tag
+      inputs:
+        ResourceType: EC2
+        ResourceIds:
+        - '{{ instanceID }}'
+        Tags:
+        - Key: IR_Triage_Status
+          Value: Complete
+      isEnd: true
+    - name: createFailTag
+      action: aws:createTags
+      description: update triage status tag
+      inputs:
+        ResourceType: EC2
+        ResourceIds:
+        - '{{ instanceID }}'
+        Tags:
+        - Key: IR_Triage_Status
+          Value: Failed
+      isEnd: true

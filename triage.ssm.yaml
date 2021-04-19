@@ -1,0 +1,88 @@
+schemaVersion: '0.3'
+description: |-
+    **Security incident response triage of EC2 instances**
+
+parameters:
+    caseNum:
+        type: String
+        description: Case number
+    bucket:
+        type: String
+        description: Output bucket for triage results
+        default: ir-triage-results
+    instanceID:
+        type: String
+        description: EC2 instance ID to collect triage data from
+mainSteps:
+    - name: apply_initial_tags 
+      action: aws:createTags
+      description: Apply initial triage tags to instance
+      inputs:
+        ResourceType: EC2
+        ResourceIds:
+          - '{{ instanceID }}'
+        Tags:
+          - Key: IR_Case_Num
+            Value: '{{ caseNum }}'
+          - Key: IR_Case_Status
+            Value: Open
+          - Key: IR_Triage_Status
+            Value: In Progress
+          - Key: IR_Analysis_Status
+            Value: Pending
+    - name: get_operating_system
+      action: aws:executeAwsApi
+      description: Detect instance's operating system
+      inputs:
+        Service: ssm
+        Api: DescribeInstanceInformation
+        Filters:
+          - Key: InstanceIds
+            Values:
+              - '{{ instanceID }}'
+      outputs:
+          - Name: os
+            Selector: $.InstanceInformationList[0].PlatformType
+            Type: String
+    - name: create_snapshots
+      description: create snapshots of all associated EBS volumes
+      action: aws:executeAwsApi
+      inputs:
+        Service: ec2
+        Api: CreateSnapshots
+        InstanceSpecification:
+          InstanceId: '{{ instanceID }}'
+          ExcludeBootVolume: false
+        Description: 'Snapshot created for IR case {{ caseNum }}'
+        TagSpecifications:
+          - ResourceType: snapshot
+            Tags:
+            - Key: IR_Case_Num
+              Value: '{{ caseNum }}'
+            - Key: IR_Case_Status
+              Value: Open
+      outputs:
+        - Name: snapshotID
+          Type: StringList
+          Selector: $.Snapshots..SnapshotId
+    - name: chooseTriage
+      description: Select remaining steps to run based on detected operating system
+      action: aws:branch
+      inputs:
+        Choices:
+          - NextStep: run_linux_triage
+            Variable: '{{ get_operating_system.os }}'
+            EqualsIgnoreCase: Linux
+    - name: run_linux_triage
+      description: Launch Linux triage automation document
+      action: aws:executeAutomation
+      inputs:
+        DocumentName: triage-linux
+        RuntimeParameters:
+          instanceID: '{{ instanceID }}'
+          caseNum: '{{ caseNum }}'
+          bucket: '{{ bucket }}'
+outputs:
+    - get_operating_system.os
+    - create_snapshots.snapshotID
+
